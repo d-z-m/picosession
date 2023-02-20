@@ -1,11 +1,12 @@
 package crypto
 
-import(
+import (
 	"crypto/rand"
+
 	"golang.org/x/crypto/nacl/secretbox"
 )
 
-const(
+const (
 	NonceSize = 24
 	KeySize   = 32
 )
@@ -14,9 +15,7 @@ type SecretBox struct {
 	key [KeySize]byte
 }
 
-
-
-func(b *SecretBox) Encrypt(plaintext []byte) (ciphertext []byte) {
+func (b *SecretBox) Encrypt(plaintext []byte) (ciphertext []byte) {
 	var nonce [NonceSize]byte
 
 	if _, err := io.ReadFull(rand.Reader, nonce[:]); err != nil {
@@ -27,7 +26,7 @@ func(b *SecretBox) Encrypt(plaintext []byte) (ciphertext []byte) {
 	return
 }
 
-func(b *SecretBox) Decrypt(ciphertext []byte) (plaintext []byte, ok bool) {
+func (b *SecretBox) Decrypt(ciphertext []byte) (plaintext []byte, ok bool) {
 	var nonce [NonceSize]byte
 
 	copy(nonce[:], ciphertext[:NonceSize])
@@ -49,7 +48,7 @@ func New(key [32]byte) SecretBox {
 	}
 
 	b := Secretbox{
-		key: key
+		key: key,
 	}
 
 	return b

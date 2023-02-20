@@ -1,17 +1,16 @@
 package picosession
 
-
-import(
-	"encoding/json"
+import (
 	b64 "encoding/base64"
+	"encoding/json"
+
 	"golang.unexpl0.red/picosession/crypto"
 )
 
 type Session struct {
-	m sync.Mutex
+	m       sync.Mutex
 	kvstore map[string]json.Marshaler
 }
-
 
 type Broker struct {
 	sb crypto.SecretBox
@@ -24,7 +23,7 @@ func (s *Session) Get(k string) (v string, exists bool) {
 	return
 }
 
-func(s *Session) Put(k, v string) {
+func (s *Session) Put(k, v string) {
 	s.m.Lock()
 	defer s.m.Unlock()
 	s.kvstore[k] = v
@@ -40,18 +39,18 @@ func New(key [crypto.KeySize]byte) Broker {
 	return b
 }
 
-func (b *Broker) NewSession() *Session {
+func (b *Broker) NewSession() Session {
 	m := make(map[string]json.Marshaler)
 
-	s := &Session{
-		kvstore: m
+	s := Session{
+		kvstore: m,
 	}
 
 	return s
 }
 
-func (b *Broker) BakeCookie(s *Session) http.Cookie {
-	//this should never fail, as it is a map of Marshalers
+func (b *Broker) BakeCookie(s Session) http.Cookie {
+	// this should never fail, as it is a map of Marshalers
 	sessionJson, err := json.Marshal(s.kvstore)
 	if err != nil {
 		panic("Error marshaling kvstore!")
@@ -60,15 +59,15 @@ func (b *Broker) BakeCookie(s *Session) http.Cookie {
 	e := b.sb.Encrypt(sessionJson)
 
 	c := http.Cookie{
-		Name: "session",
-		Value: b64.EncodeToString(e),
+		Name:     "session",
+		Value:    b64.EncodeToString(e),
 		HttpOnly: true,
 		Secure:   true,
 	}
 	return c
 }
 
-func(b *Broker) DigestCookie(c *http.Cookie) (Session, err) {
+func (b *Broker) DigestCookie(c http.Cookie) (Session, err) {
 	var kv map[string]json.Marshaler
 
 	e, err := b64.DecodeString(c.Value)
@@ -82,7 +81,6 @@ func(b *Broker) DigestCookie(c *http.Cookie) (Session, err) {
 	}
 
 	err := json.Unmarshal(d, &kv)
-
 	if err != nil {
 		return errors.New("Failed to digest cookie, error unmarshaling: " + err.Errori())
 	}
@@ -93,6 +91,3 @@ func(b *Broker) DigestCookie(c *http.Cookie) (Session, err) {
 
 	return s
 }
-
-
-
