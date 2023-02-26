@@ -2,8 +2,9 @@ package crypto
 
 import (
 	"crypto/rand"
-
+	"crypto/subtle"
 	"golang.org/x/crypto/nacl/secretbox"
+	"io"
 )
 
 const (
@@ -31,7 +32,8 @@ func (b *SecretBox) Decrypt(ciphertext []byte) (plaintext []byte, ok bool) {
 
 	copy(nonce[:], ciphertext[:NonceSize])
 
-	plaintext, ok := secretbox.Open(nil, ciphertext[NonceSize:], &nonce, &b.key)
+	plaintext, ok = secretbox.Open(nil, ciphertext[NonceSize:], &nonce, &b.key)
+	return
 }
 
 func isZero(slice []byte) bool {
@@ -40,14 +42,15 @@ func isZero(slice []byte) bool {
 	for _, b := range slice {
 		c &= subtle.ConstantTimeByteEq(b, 0)
 	}
+	return c == 0x01
 }
 
-func New(key [32]byte) SecretBox {
+func NewSecretBox(key [32]byte) SecretBox {
 	if isZero(key[:]) {
 		panic("Cannot initialize secretbox with zero key!")
 	}
 
-	b := Secretbox{
+	b := SecretBox{
 		key: key,
 	}
 

@@ -3,23 +3,27 @@ package picosession
 import (
 	b64 "encoding/base64"
 	"encoding/json"
+	"errors"
+	"net/http"
+	"sync"
 
 	"golang.unexpl0.red/picosession/crypto"
 )
 
+// goroutine safe session struct
 type Session struct {
-	m       sync.Mutex
-	kvstore map[string]json.Marshaler
+	m       sync.RWMutex
+	kvstore map[any]any
 }
 
 type Broker struct {
 	sb crypto.SecretBox
 }
 
-func (s *Session) Get(k string) (v string, exists bool) {
+func (s *Session) Get(k any) (v any, exists bool) {
 	s.m.RLock()
 	defer s.m.RUnlock()
-	v, exists := s.kvstore[k]
+	v, exists = s.kvstore[k]
 	return
 }
 
@@ -39,17 +43,17 @@ func New(key [crypto.KeySize]byte) Broker {
 	return b
 }
 
-func (b *Broker) NewSession() Session {
-	m := make(map[string]json.Marshaler)
+func (b *Broker) NewSession() *Session {
+	m := make(map[any]any)
 
 	s := Session{
 		kvstore: m,
 	}
 
-	return s
+	return &s
 }
 
-func (b *Broker) BakeCookie(s Session) http.Cookie {
+func (b *Broker) bakeCookie(s Session) http.Cookie {
 	// this should never fail, as it is a map of Marshalers
 	sessionJson, err := json.Marshal(s.kvstore)
 	if err != nil {
@@ -60,34 +64,35 @@ func (b *Broker) BakeCookie(s Session) http.Cookie {
 
 	c := http.Cookie{
 		Name:     "session",
-		Value:    b64.EncodeToString(e),
+		Value:    b64.StdEncoding.EncodeToString(e),
 		HttpOnly: true,
 		Secure:   true,
+		SameSite: http.SameSiteLaxMode,
 	}
 	return c
 }
 
-func (b *Broker) DigestCookie(c http.Cookie) (Session, err) {
-	var kv map[string]json.Marshaler
+func (b *Broker) digestCookie(c *http.Cookie) (*Session, error) {
+	var kv map[any]any
 
-	e, err := b64.DecodeString(c.Value)
+	e, err := b64.StdEncoding.DecodeString(c.Value)
 	if err != nil {
-		return errors.New("Failed to digest cookie, incorrect encoding")
+		return &Session{}, errors.New("Failed to digest cookie, incorrect encoding")
 	}
 
 	d, ok := b.sb.Decrypt(e)
 	if !ok {
-		return errors.New("Failed to digest cookie, error decrypting")
+		return &Session{}, errors.New("Failed to digest cookie, error decrypting")
 	}
 
-	err := json.Unmarshal(d, &kv)
+	err = json.Unmarshal(d, &kv)
 	if err != nil {
-		return errors.New("Failed to digest cookie, error unmarshaling: " + err.Errori())
+		return &Session{}, errors.New("Failed to digest cookie, error unmarshaling: " + err.Error())
 	}
 
 	s := Session{
 		kvstore: kv,
 	}
 
-	return s
+	return &s, nil
 }
